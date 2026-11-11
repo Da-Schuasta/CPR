@@ -43,6 +43,7 @@ function freshState(method){
     presetChoices:{weapons:{},outfit:{},cyber:{}}, // Index der „oder“-Wahl
     buys:[], // Einkäufe {cat,name,cost,qty,loc,hl,slots,req,cyber}
     sellSoul:false, soulEmployer:null,
+    sheetDesign:"official", // "official" (RTG-PDF) | "alt" (cyberpunk_sheets_getrennt)
     step:"start", visited:{}
   };
 }
@@ -1517,7 +1518,35 @@ function sheetEquipmentHTML(){
     <div class="sheet-section"><h2>Fashion</h2>${ul(fashions)}</div>
     <div class="sheet-section"><h2>Cyberware</h2>${ul(cybers)}</div>`;
 }
+
+/* ---------- Bogen-Design wählen (offiziell vs. cyberpunk_sheets_getrennt) ---------- */
+function altSheetAvailable(){ return typeof CPR.altSheetAvailable==="function" && CPR.altSheetAvailable(S.role); }
+function sheetDesignPanel(){
+  const alt = altSheetAvailable();
+  const chosen = S.sheetDesign==="alt" && alt ? "alt" : "official";
+  return `
+    <div class="panel noprint" id="sheet-design">
+      <h2>Bogen-Design</h2>
+      <div class="radio-line">
+        <label><input type="radio" name="sheetdesign" value="official" ${chosen==="official"?"checked":""}>
+          📄 Offizieller RTG-Bogen (PDF)</label>
+        ${alt?`<label><input type="radio" name="sheetdesign" value="alt" ${chosen==="alt"?"checked":""}>
+          🎨 Cyberpunk-Sheet (getrennt)</label>`
+        :`<label class="dim" title="Für diese Rolle liegt kein getrennter Bogen vor">
+          🎨 Cyberpunk-Sheet (getrennt) – nur für Solo &amp; Medtech</label>`}
+      </div>
+      <p class="dim">Der offizielle RTG-Bogen wird als befüllbares PDF heruntergeladen;
+      das Cyberpunk-Sheet wird direkt hier vorbelegt und gedruckt.</p>
+    </div>`;
+}
+function bindSheetDesign(){
+  $$("#sheet-content input[name='sheetdesign']").forEach(r=>{
+    r.addEventListener("change",()=>{ S.sheetDesign=r.value; save(); renderSheet(); });
+  });
+}
 function renderSheet(){
+  if(!altSheetAvailable()) S.sheetDesign="official";
+  if(S.sheetDesign==="alt"){ renderAltSheetScreen(); return; }
   const dv=derived();
   const role=S.role?CPR.ROLES[S.role]:{name:"–",ability:"–",ra:""};
   const ls=S.role==="exec"?CPR.LIFESTYLE.exec:CPR.LIFESTYLE.default;
@@ -1532,6 +1561,7 @@ function renderSheet(){
   $("#sheet-content").innerHTML=`
   <div class="sheet">
     <h1>Charakterbogen</h1>
+    ${sheetDesignPanel()}
     <div class="panel">
       <label class="fld"><span>Name</span><input type="text" id="inp-sheetname" value="${esc(S.name||"")}" placeholder="Unbenannter Edgerunner"></label>
       <p><b>${esc(role.name)}</b> · Role Ability: <b>${esc(role.ability)} ${S.roleAbility}</b> ·
@@ -1623,6 +1653,56 @@ function renderSheet(){
     rd.readAsText(f);
     ev.target.value="";
   });
+  bindSheetDesign();
+}
+
+/* ---------- Alternativer Bogen (cyberpunk_sheets_getrennt) ---------- */
+function renderAltSheetScreen(){
+  const role=S.role?CPR.ROLES[S.role]:{name:"–"};
+  $("#sheet-content").innerHTML=`
+  <div class="sheet alt-sheet-screen">
+    <h1 class="noprint">Charakterbogen</h1>
+    ${sheetDesignPanel()}
+    <div class="panel noprint">
+      <p><b>${esc(role.name)}</b> · ${esc(methodLabel(S.method))} · Design:
+        <b>Cyberpunk-Sheet (getrennt)</b></p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-alt-print" type="button">🖨 Drucken</button>
+        <button class="btn" id="btn-alt-pdf" type="button">📄 PDF (ausfüllbar)</button>
+        <button class="btn" id="btn-alt-json" type="button">💾 Bogenwerte als JSON</button>
+        <button class="btn" type="button" onclick="go('${S.method==="complete"?"shop":"equip"}')">◀ Zurück zum Einkauf</button>
+      </div>
+      <p class="dim">Tipp: Beim Drucken ggf. Querformat und „Hintergrundgrafiken“ aktivieren.
+        Das PDF enthält echte Formularfelder und lässt sich am PC weiter ausfüllen.</p>
+    </div>
+    <div id="alt-sheet-host"></div>
+  </div>`;
+
+  bindSheetDesign();
+  const host=$("#alt-sheet-host");
+  const res=CPR.renderAltSheet(host, S.role);
+  if(res&&res.warns&&res.warns.length) console.warn("[sheet-alt]",res.warns);
+
+  $("#btn-alt-print").addEventListener("click",()=>window.print());
+  $("#btn-alt-pdf").addEventListener("click",async ev=>{
+    const btn=ev.currentTarget;
+    if(btn.disabled) return;
+    const label=btn.textContent;
+    btn.disabled=true; btn.textContent="⏳ PDF wird erzeugt …";
+    try{ await CPR.downloadAltSheetPDF(S.role); }
+    finally{ btn.disabled=false; btn.textContent=label; }
+  });
+  $("#btn-alt-json").addEventListener("click",()=>{
+    const data=CPR.altSheetCurrentJSON(S.role);
+    const blob=new Blob([JSON.stringify(data,null,1)],{type:"application/json"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=`${(S.name||"charakter")}-${S.role}-bogen.json`.toLowerCase()
+      .replace(/[^a-z0-9äöüß.\-]+/gi,"-");
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    toast("💾 Bogenwerte als JSON exportiert.");
+  });
 }
 
 /* =============== Init =============== */
@@ -1633,6 +1713,7 @@ function init(){
   S.presetChoices=S.presetChoices||{weapons:{},outfit:{},cyber:{}};
   S.buys=S.buys||[]; S.skills=S.skills||{}; S.skillChoices=S.skillChoices||{};
   S.lp=S.lp||{}; S.visited=S.visited||{}; S.stats=S.stats||{};
+  S.sheetDesign=S.sheetDesign==="alt"?"alt":"official";
   $("#btn-dicelog").addEventListener("click",()=>$("#dicelog").classList.toggle("hidden"));
   $("#btn-dicelog-close").addEventListener("click",()=>$("#dicelog").classList.add("hidden"));
   $("#btn-reset").addEventListener("click",()=>{

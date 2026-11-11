@@ -45,6 +45,20 @@ den offiziellen `RTG-CPR-CharacterSheet-Fillable.pdf` (in `js/sheet-pdf-b64.js`
 eingebettet), befüllt alle passenden Formularfelder per `pdf-lib` und lädt
 das fertige PDF herunter – ebenfalls **komplett offline**.
 
+**🎨 Alternativer Bogen (getrennt):** Für **Solo** und **Medtech** bietet der
+Bogen-Screen zusätzlich das Design „Cyberpunk-Sheet (getrennt)“ (Quelle:
+`cyberpunk_sheets_getrennt/`). Er wird direkt aus dem Charakterzustand im
+Browser gerendert (Original-Hintergründe + Formularfelder, inkl.
+nachgerechneter BASE/SUM-Werte und Checkboxen) und kann gedruckt (Querformat,
+„Hintergrundgrafiken“ aktivieren) oder als JSON exportiert werden. Über
+**„📄 PDF (ausfüllbar)“** erzeugt derselbe Screen außerdem ein echtes
+AcroForm-PDF mit denselben Hintergründen und Formularfeldern – bereits
+vorbefüllt, aber am PC weiter bearbeitbar. Auch dieses Design funktioniert
+**komplett offline**; die Felddaten liegen eingebettet in
+`js/sheet-alt-data.js`, die Hintergrundbilder in `js/sheet-alt-bg-b64.js`.
+Für die übrigen acht Rollen bleibt nur der offizielle RTG-Bogen verfügbar
+(mit Hinweis in der Design-Auswahl).
+
 Was wohin gefüllt wird:
 
 - Identität (Handle, Rolle, Role Ability + Rang), alle STATs inkl.
@@ -77,21 +91,27 @@ js/lifepath.js    – Lifepath-Tabellen S. 45–69 (allgemein + alle 10 Rollen)
 js/app.js         – komplette Logik (Flow, Budgets, Validierung, Bogen)
 js/sheet-pdf.js   – Mapping State → RTG-Bogen-Felder + PDF-Befüllung
 js/sheet-pdf-b64.js – der offizielle RTG-Bogen als Base64 (~1,9 MB)
+js/sheet-alt.js   – Mapping State → alternativer Bogen (Solo/Medtech) + Rendering
+js/sheet-alt-data.js – Feld-/Seiten-/Berechnungsdaten der getrennten Bögen (eingebettet)
+js/sheet-alt-bg-b64.js – Hintergrundseiten der getrennten Bögen als JPEG/Base64
+js/sheet-alt-pdf.js – erzeugt daraus ein vorbefülltes, ausfüllbares AcroForm-PDF
 js/vendor/pdf-lib.min.js – pdf-lib 1.17.1 (MIT), UMD-Bundle, offline
-test-harness.html – 66 automatisierte Tests (Regressionsschutz)
+test-harness.html – 85 automatisierte Tests (Regressionsschutz)
 ```
 
 ## Tests
 
-`test-harness.html` im Browser öffnen – die 66 Tests laufen automatisch
+`test-harness.html` im Browser öffnen – die 85 Tests laufen automatisch
 (alle drei Methoden komplett, Budgetrechnungen, Humanity, Preset-Auswahl,
-Shop-Käufe, Save/Load, PDF-Feld-Mapping inkl. eingebettetem Bogen).
-Kopfzeile muss am Ende **„66 PASS / 0 FAIL“** zeigen. Headless-Check:
+Shop-Käufe, Save/Load, PDF-Feld-Mapping inkl. eingebettetem Bogen sowie
+alternativer Solo-/Medtech-Bogen inkl. Verfügbarkeits-Fallback und
+PDF-Erzeugung). Kopfzeile muss am Ende **„85 PASS / 0 FAIL“** zeigen.
+Headless-Check (PDF-Erzeugung braucht etwas Zeit):
 
 ```powershell
 & "C:\Program Files\Google\Chrome\Application\chrome.exe" --headless=new `
-  --virtual-time-budget=8000 --dump-dom `
-  "file:///C:/.../charakter-erstellung/test-harness.html" | Select-String "PASS |FAIL "
+  --virtual-time-budget=30000 --dump-dom `
+  "file:///C:/.../CPR/test-harness.html" | Select-String "PASS |FAIL "
 ```
 
 ## Rechtliches

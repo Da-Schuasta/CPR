@@ -33,8 +33,12 @@
 <script src="js/vendor/pdf-lib.min.js"></script>
 <script src="js/sheet-pdf-b64.js"></script>
 <script src="js/sheet-pdf.js"></script>
+<script src="js/sheet-alt-data.js"></script>
+<script src="js/sheet-alt-bg-b64.js"></script>
+<script src="js/sheet-alt.js"></script>
+<script src="js/sheet-alt-pdf.js"></script>
 <script>
-(function(){
+(async function(){
   const out=[];
   const ok=m=>out.push("PASS "+m);
   const fail=m=>out.push("FAIL "+m);
@@ -330,6 +334,117 @@
     else fail("PDF Reputation/IP");
     if(typeof pdfRes.warns==="object") ok("PDF: "+pdfRes.warns.length+" Warnung(en) im Ergebnis");
     else fail("PDF warnt nicht korrekt");
+
+    /* 12c. Alternativer Bogen (cyberpunk_sheets_getrennt) */
+    if(typeof CPR.altSheetValues==="function") ok("sheet-alt.js geladen (altSheetValues)");
+    else fail("sheet-alt.js fehlt");
+    if(CPR.altSheetAvailable("solo")===true&&CPR.altSheetAvailable("medtech")===true
+      &&CPR.altSheetAvailable("netrunner")===false) ok("Alt-Bogen nur fuer Solo+Medtech");
+    else fail("Alt-Bogen-Verfuegbarkeit");
+    S=freshState("complete"); S.role="solo"; S.name="Vex"; S.culturalLang="English";
+    S.stats={INT:6,REF:8,DEX:7,TECH:6,COOL:7,WILL:6,LUCK:5,MOVE:6,BODY:7,EMP:6};
+    S.skills={"Athletics":4,"Handgun":6,"Language (Streetslang)":2,"Local Expert (Your Home)":2,
+      "Perception":4,"Conceal/Reveal Object":3,"Play Instrument (choose 1)":4,"Science (choose 1)":3,
+      "Concentration":2,"Conversation":2,"Education":2,"Evasion":2,"First Aid":2,"Human Perception":2,
+      "Persuasion":2,"Stealth":2,"Brawling":2};
+    S.skillChoices={"Play Instrument (choose 1)":"Guitar","Science (choose 1)":"Physics"};
+    S.lp={culturalRegion:0,personality:1,clothingStyle:2,affectation:3,hairstyle:1,values:4,feelings:2,
+      valuedPerson:3,valuedPossession:5,familyBackground:6,environment:2,familyCrisis:1,
+      friendCount:2,friend_0:0,friend_1:0,enemyType_0:2,enemyCause_0:1,enemyRes_0:3,enemyRevenge_0:2,
+      love_0:1,lifeGoal:4,role_0:0};
+    S.buys=[
+      {cat:"weapon",name:"Assault Rifle",cost:500,qty:1},
+      {cat:"armor",name:"Light Armorjack",cost:100,qty:1,loc:"Body"},
+      {cat:"gear",name:"Agent",cost:100,qty:1},
+      {cat:"fashion",name:"Urban Flash: Jacket",cost:100,qty:1},
+      {cat:"cyberware",name:"Neural Link",cost:500,hl:7,slots:0,qty:1},
+      {cat:"cyberware",name:"Sandevistan",cost:500,hl:7,slots:1,qty:1},
+      {cat:"cyberware",name:"Cybereye",cost:100,hl:7,slots:0,found:true,qty:2},
+      {cat:"cyberware",name:"Anti-Dazzle",cost:100,hl:2,slots:1,req:"Cybereye",qty:1}
+    ];
+    S.lpDone=true; S.skillsDone=true; S.shopDone=true;
+    const altRes=CPR.altSheetValues("solo");
+    const AV=altRes.values;
+    if(AV.NAME1==="Vex"&&AV.INT==="6"&&AV.REF==="8") ok("Alt: NAME/STATs");
+    else fail("Alt NAME/STATs: "+AV.NAME1+"/"+AV.INT+"/"+AV.REF);
+    if(AV["ATLETHICS LVL"]==="4"&&AV["ATLETHICS BASE"]===String(7+4)
+      &&AV["HANDGUN BASE"]===String(8+6)) ok("Alt: Skill LVL/BASE");
+    else fail("Alt Skill: "+AV["ATLETHICS BASE"]+"/"+AV["HANDGUN BASE"]);
+    if(AV["CONSEAL LVL"]==="3"&&AV["CONSEAL BASE"]===String(6+3)
+      &&AV["LANGUAGE 1"]==="Streetslang"&&AV["LANGUAGE 2"]==="English"
+      &&AV["INSTRUMENT 1"]==="Guitar"&&AV["science 1"]==="Physics")
+      ok("Alt: Sprach-/Wahl-Skillfelder");
+    else fail("Alt Sprach-/Wahl-Skills");
+    if(AV["WEAPON 1"]==="Assault Rifle"&&AV["DMG 1"]==="5d6"
+      &&AV["ARMOR 1"]==="Light Armorjack"&&AV["SP 1"]==="11"&&AV["GEAR 1"]!=null)
+      ok("Alt: Waffen/Ruestung/Ausstattung");
+    else fail("Alt Ausstattung: "+AV["WEAPON 1"]+"/"+AV["ARMOR 1"]+"/"+AV["SP 1"]);
+    if(altRes.checks.indexOf("NEURALINK CHECK1")>=0
+      &&altRes.checks.indexOf("CYBEREYE L CHECK1")>=0) ok("Alt: Checkboxen (Neural Link/Cybereye)");
+    else fail("Alt Checkboxen: "+altRes.checks.join(","));
+    S.sheetDesign="alt"; go("sheet");
+    if(!!document.querySelector("#alt-sheet-host .alt-sheet")
+      &&document.querySelectorAll("#alt-sheet-host .alt-page").length===3)
+      ok("Alt: Solo-Bogen mit 3 Seiten gerendert");
+    else fail("Alt Solo-Render");
+    const altNameEl=document.querySelector('#alt-sheet-host input[name="NAME1"]');
+    const altBaseEl=document.querySelector('#alt-sheet-host input[name="ATLETHICS BASE"]');
+    if(altNameEl&&altNameEl.value==="Vex"&&altBaseEl&&altBaseEl.value===String(7+4))
+      ok("Alt: DOM vorbefuellt + BASE nachgerechnet");
+    else fail("Alt DOM: "+(altNameEl?altNameEl.value:"-")+"/"+(altBaseEl?altBaseEl.value:"-"));
+    if($("#sheet-content").innerHTML.indexOf("Cyberpunk-Sheet (getrennt)")>=0)
+      ok("Alt: Design-Auswahl im Sheet-Screen");
+    else fail("Alt Design-Auswahl fehlt");
+
+    /* 12d. Ausfuellbares PDF (Solo) */
+    if(typeof CPR.buildAltSheetPDF==="function"
+      &&typeof CPR.downloadAltSheetPDF==="function") ok("sheet-alt-pdf.js geladen");
+    else fail("sheet-alt-pdf.js fehlt");
+    if($("#sheet-content").innerHTML.indexOf("PDF (ausfüllbar)")>=0
+      &&!!document.querySelector("#btn-alt-pdf")) ok("Alt: PDF-Button im Sheet-Screen");
+    else fail("Alt PDF-Button fehlt");
+    if(window.CPR_ALT_BG&&CPR_ALT_BG.solo&&CPR_ALT_BG.solo.length===3
+      &&CPR_ALT_BG.medtech&&CPR_ALT_BG.medtech.length===3)
+      ok("Alt-PDF: Hintergrundbilder eingebettet");
+    else fail("Alt-PDF Hintergruende fehlen");
+    const altPdf=await CPR.buildAltSheetPDF("solo");
+    if(altPdf.pages===3&&altPdf.fields>=700&&altPdf.bytes.length>500000)
+      ok("Alt-PDF: "+altPdf.pages+" Seiten, "+altPdf.fields+" Felder, "+
+        Math.round(altPdf.bytes.length/1024)+" KB");
+    else fail("Alt-PDF Build: "+altPdf.pages+"/"+altPdf.fields+"/"+altPdf.bytes.length);
+    const altPdfDoc=await PDFLib.PDFDocument.load(altPdf.bytes);
+    const altPdfForm=altPdfDoc.getForm();
+    if(altPdfDoc.getPageCount()===3) ok("Alt-PDF: 3 Seiten ladbar");
+    else fail("Alt-PDF Seiten: "+altPdfDoc.getPageCount());
+    if(altPdfForm.getTextField("NAME1").getText()==="Vex"
+      &&altPdfForm.getTextField("ATLETHICS BASE").getText()===String(7+4))
+      ok("Alt-PDF: NAME/BASE vorbefuellt");
+    else fail("Alt-PDF NAME/BASE");
+    if(altPdfForm.getTextField("WEAPON 1").getText()==="Assault Rifle"
+      &&altPdfForm.getTextField("SP 1").getText()==="11")
+      ok("Alt-PDF: Waffe/Ruestung vorbefuellt");
+    else fail("Alt-PDF Waffe/Ruestung");
+    if(altPdfForm.getCheckBox("NEURALINK CHECK1").isChecked()
+      &&altPdfForm.getCheckBox("CYBEREYE L CHECK1").isChecked())
+      ok("Alt-PDF: Checkboxen gesetzt");
+    else fail("Alt-PDF Checkboxen");
+
+    S=freshState("complete"); S.role="medtech"; S.name="Doc"; S.culturalLang="German";
+    S.stats={INT:8,REF:6,DEX:6,TECH:8,COOL:6,WILL:6,LUCK:5,MOVE:5,BODY:5,EMP:6};
+    S.skills={"Athletics":2,"Brawling":2,"Concentration":2,"Conversation":2,"Education":2,"Evasion":2,
+      "First Aid":6,"Human Perception":2,"Language (Streetslang)":2,"Local Expert (Your Home)":2,
+      "Perception":2,"Persuasion":2,"Stealth":2,"Paramedic":4};
+    S.sheetDesign="alt"; go("sheet");
+    const altMed=CPR.altSheetValues("medtech");
+    if(altMed.values.NAME1==="Doc"&&altMed.values["PARAMEDIC BASE"]===String(8+4)
+      &&document.querySelectorAll("#alt-sheet-host .alt-page").length===3)
+      ok("Alt: Medtech-Bogen (3 Seiten, Paramedic BASE)");
+    else fail("Alt Medtech");
+    S=freshState("complete"); S.role="netrunner"; S.sheetDesign="alt"; go("sheet");
+    if(!!document.querySelector("#btn-pdf")&&!document.querySelector("#alt-sheet-host"))
+      ok("Alt: Fallback auf offiziellen Bogen");
+    else fail("Alt Fallback");
+    S.role="solo"; /* fuer Save/Load-Test unten */
 
     /* 13. Save/Load rundet */
     S.name="Kesha2";
