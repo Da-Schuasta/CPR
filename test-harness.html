@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="UTF-8"><title>Test-Harness</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar"><div class="brand">TEST</div>
+  <div class="topbar-actions">
+    <button id="btn-dicelog" class="btn" type="button">dice</button>
+    <button id="btn-reset" class="btn" type="button">reset</button>
+  </div>
+</header>
+<nav id="stepper"></nav>
+<main id="main">
+  <section id="screen-start" class="screen"><div class="wrap" id="start-content"></div></section>
+  <section id="screen-role" class="screen hidden"><div class="wrap" id="role-content"></div></section>
+  <section id="screen-lifepath" class="screen hidden"><div class="wrap" id="lifepath-content"></div></section>
+  <section id="screen-stats" class="screen hidden"><div class="wrap" id="stats-content"></div></section>
+  <section id="screen-derived" class="screen hidden"><div class="wrap" id="derived-content"></div></section>
+  <section id="screen-skills" class="screen hidden"><div class="wrap" id="skills-content"></div></section>
+  <section id="screen-equip" class="screen hidden"><div class="wrap" id="equip-content"></div></section>
+  <section id="screen-shop" class="screen hidden"><div class="wrap" id="shop-content"></div></section>
+  <section id="screen-sheet" class="screen hidden"><div class="wrap" id="sheet-content"></div></section>
+</main>
+<aside id="dicelog" class="dicelog hidden"><div class="dicelog-head"><strong>log</strong>
+  <button id="btn-dicelog-close" class="btn" type="button">x</button></div>
+  <div id="dicelog-entries"></div></aside>
+<div id="toast" class="toast hidden"></div>
+
+<script src="js/data.js"></script>
+<script src="js/lifepath.js"></script>
+<script src="js/app.js"></script>
+<script src="js/vendor/pdf-lib.min.js"></script>
+<script src="js/sheet-pdf-b64.js"></script>
+<script src="js/sheet-pdf.js"></script>
+<script>
+(function(){
+  const out=[];
+  const ok=m=>out.push("PASS "+m);
+  const fail=m=>out.push("FAIL "+m);
+  try{
+    /* 0. deterministischer Start: Save entfernen (Wiederholungsläufe im selben Profil) */
+    try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+    S=freshState(null); renderAll();
+
+    /* 1. Empty State (nach Reset, kein Save) */
+    if($("#start-content").innerHTML.indexOf("Willkommen in Night City")>=0) ok("Start-Screen ohne Save gerendert");
+    else fail("Start-Screen ohne Save");
+
+    /* 2. Rolle */
+    S=freshState("complete"); S.role="solo"; S.name="Vex";
+    S.culturalLang="English";
+    S.lp={culturalRegion:0,personality:0,clothingStyle:0,hairstyle:0,affectation:0,
+      values:0,feelings:0,valuedPerson:0,valuedPossession:0,familyBackground:0,
+      environment:0,familyCrisis:0,friendCount:1,friend_0:0,lifeGoal:0,role_0:0};
+    S.lpDone=true;
+    go("role");
+    if($("#role-content").innerHTML.indexOf("Pick a Role")>=0) ok("Role-Screen");
+    else fail("Role-Screen");
+
+    /* 3. Lifepath rendert */
+    go("lifepath");
+    if($("#lifepath-content").innerHTML.indexOf("Cultural Origins")>=0) ok("Lifepath-Screen");
+    else fail("Lifepath-Screen");
+
+    /* 4. CP Stats */
+    S.step="stats"; S.statMode=null; S.stats={}; renderAll();
+    if($("#stats-content").innerHTML.indexOf("62 Punkte")>=0) ok("CP-Stats Screen");
+    else fail("CP-Stats Screen");
+    if(CPR.STATS.every(st=>S.stats[st]===2)) ok("CP-Stats auf 2 geseedet");
+    else fail("CP-Stats Seed");
+    S.stats.BODY=6; S.stats.WILL=6; S.stats.EMP=8;
+
+    /* 5. Derived */
+    go("derived");
+    const dv=derived();
+    if(dv.hp===10+5*Math.ceil((6+6)/2)) ok("HP="+dv.hp+" (40 erwartet)");
+    else fail("HP="+dv.hp);
+    if(dv.sw===20&&dv.deathSave===6) ok("SW/DeathSave");
+    else fail("SW="+dv.sw+" DS="+dv.deathSave);
+    if($("#derived-content").innerHTML.indexOf("Humanity")>=0) ok("Derived-Screen");
+    else fail("Derived-Screen");
+
+    /* 6. CP Skills */
+    go("skills");
+    if(Object.keys(S.skills).length===13) ok("CP-Skills: 13 Basic geseedet");
+    else fail("CP-Seed="+Object.keys(S.skills).length);
+    S.skills["Handgun"]=4;
+    renderSkills();
+    if($("#skills-content").innerHTML.indexOf("Handgun")>=0) ok("CP-Skills Screen + Handgun");
+    else fail("CP-Skills Screen");
+    const usedCP=skillPts(Object.keys(S.skills));
+    if(usedCP===13*2+4) ok("CP-Punkte="+usedCP+" (30 erwartet)");
+    else fail("CP-Punkte="+usedCP);
+
+    /* 7. Shop + Budgets */
+    go("shop");
+    if($("#shop-content").innerHTML.indexOf("2.550")>=0||$("#shop-content").innerHTML.indexOf("2.550eb")>=0) ok("Shop-Screen");
+    else fail("Shop-Screen");
+    addBuy({cat:"weapon",name:"Assault Rifle",cost:500});
+    addBuy({cat:"fashion",name:"Urban Flash: Jacket",cost:100});
+    addBuy({cat:"cyberware",name:"Neural Link",cost:500,hl:7,slots:0});
+    renderShop();
+    let b=cpBudgets();
+    if(b.fashionRem===700) ok("Fashion-Budget=700");
+    else fail("Fashion="+b.fashionRem);
+    if(b.mainRem===1550) ok("Main-Budget=1550");
+    else fail("Main="+b.mainRem);
+    /* Seele verkaufen */
+    S.sellSoul=true; b=cpBudgets();
+    if(b.soulRem===1000&&b.mainRem===2050) ok("Soul-Budget korrekt (1000/2050)");
+    else fail("Soul="+b.soulRem+" Main="+b.mainRem);
+    /* Humanity */
+    const dv2=derived();
+    if(dv2.humanity===80-7) ok("Humanity=73 nach Neural Link");
+    else fail("Humanity="+dv2.humanity);
+    /* Warnungen */
+    addBuy({cat:"cyberware",name:"Anti-Dazzle",cost:100,hl:2,slots:1,req:"Cybereye"});
+    addBuy({cat:"cyberware",name:"Kerenzikov",cost:500,hl:14,slots:1,req:"Neural Link"});
+    addBuy({cat:"cyberware",name:"Sandevistan",cost:500,hl:7,slots:1,req:"Neural Link"});
+    renderShop();
+    const w=cyberWarnings();
+    if(w.length>=3&&w.some(x=>x.indexOf("Anti-Dazzle")>=0)&&w.some(x=>x.indexOf("Speedware")>=0))
+      ok("Cyber-Warnungen korrekt ("+w.length+")");
+    else fail("Cyber-Warnungen: "+w.join(" | "));
+
+    /* 8. Sheet (CP) */
+    go("sheet");
+    if($("#sheet-content").innerHTML.indexOf("Charakterbogen")>=0) ok("Sheet-Screen");
+    else fail("Sheet-Screen");
+    if($("#sheet-content").innerHTML.indexOf("Assault Rifle")>=0) ok("Sheet zeigt Waffen");
+    else fail("Sheet Waffen");
+    if($("#sheet-content").innerHTML.indexOf("Urban Flash")>=0) ok("Sheet zeigt Fashion");
+    else fail("Sheet Fashion");
+
+    /* 9. Streetrat-Flow */
+    S=freshState("streetrat"); S.role="rockerboy"; S.name="Riff";
+    S.culturalLang="English";
+    S.lp={culturalRegion:2,culturalLang:null,personality:1,clothingStyle:3,hairstyle:1,
+      affectation:5,values:6,feelings:2,valuedPerson:3,valuedPossession:7,
+      familyBackground:8,environment:2,familyCrisis:1,friendCount:2,friend_0:4,friend_1:7,
+      enemyCount:1,enemyType_0:3,enemyCause_0:2,enemyWronged_0:"them",enemyRes_0:5,enemyRevenge_0:1,
+      loveCount:1,love_0:6,lifeGoal:4,role_0:2};
+    S.lpDone=true;
+    S.statTplIdx=0;
+    const row=CPR.STAT_TEMPLATES.rockerboy[0];
+    CPR.STATS.forEach((st,i)=>S.stats[st]=row[i]);
+    go("stats");
+    if($("#stats-content").innerHTML.indexOf("Template-Wurf")>=0) ok("SR-Stats Screen");
+    else fail("SR-Stats Screen");
+    go("skills");
+    if($("#skills-content").innerHTML.indexOf("Composition")>=0&&$("#skills-content").innerHTML.indexOf("Streetrat Skills")>=0)
+      ok("SR-Skills fix (Composition etc.)");
+    else fail("SR-Skills");
+    S.skillChoices["Play Instrument (choose 1)"]="Guitar";
+    go("equip");
+    if($("#equip-content").innerHTML.indexOf("Weapons &amp; Armor")>=0||$("#equip-content").innerHTML.indexOf("Weapons")>=0) ok("Equip-Screen");
+    else fail("Equip-Screen");
+    S.equipTab="outfit"; go("equip");
+    if($("#equip-content").innerHTML.indexOf("Lifestyle")>=0) ok("Outfit-Tab + Lifestyle");
+    else fail("Outfit-Tab");
+    S.equipTab="cyber"; go("equip");
+    if($("#equip-content").innerHTML.indexOf("Humanity")>=0) ok("Cyber-Tab + Humanity");
+    else fail("Cyber-Tab");
+    const dvSR=derived();
+    if(dvSR.humanity===row[9]*10-9) ok("SR-Humanity="+dvSR.humanity+" (71 erwartet)");
+    else fail("SR-Humanity="+dvSR.humanity+" EMP="+row[9]);
+    /* Preset-Radio simulieren: rockerboy-Cyber hat keine opt – stattdessen SR-Budget testen */
+    addBuy({cat:"weapon",name:"Heavy Pistol",cost:100});
+    if(eqCanAfford({cost:400})) ok("SR 500eb: 400 passt noch");
+    else fail("SR Budget zu knapp");
+    if(!eqCanAfford({cost:401})) ok("SR 500eb: 401 zu viel");
+    else fail("SR Budget ueberziehbar");
+    go("sheet");
+    if($("#sheet-content").innerHTML.indexOf("Heavy Pistol")>=0&&$("#sheet-content").innerHTML.indexOf("Chemskin")>=0)
+      ok("SR-Sheet zeigt Kauf + Preset-Cyber");
+    else fail("SR-Sheet");
+
+    /* 10. Edgerunner-Flow */
+    S=freshState("edgerunner"); S.role="solo"; S.name="Kesha";
+    S.culturalLang="German";
+    S.statRolls={};
+    CPR.STATS.forEach(st=>S.statRolls[st]=3);
+    CPR.STATS.forEach((st,i)=>S.stats[st]=CPR.STAT_TEMPLATES.solo[2][i]);
+    go("stats");
+    if($("#stats-content").innerHTML.indexOf("1d10 je STAT")>=0) ok("ER-Stats Screen");
+    else fail("ER-Stats Screen");
+    go("skills");
+    const erList=CPR.BASIC_SKILLS.concat(CPR.EDGERUNNER_SKILLS.solo);
+    if(Object.keys(S.skills).length===20) ok("ER: 20 Skills geseedet");
+    else fail("ER-Seed="+Object.keys(S.skills).length);
+    if(skillPts(erList)===42) ok("ER-Basispunkte=42 (Autofire x2)");
+    else fail("ER-Punkte="+skillPts(erList));
+    S.skills["Handgun"]=6;
+    if(skillPts(erList)===46) ok("ER +4 Handgun = 46");
+    else fail("ER+4="+skillPts(erList));
+    if(cpCanAfford===undefined) ok("dummy");
+
+    /* 11. Soul-Preset bei solo (Edgerunner) */
+    S.step="equip"; S.equipTab="cyber"; renderAll();
+    if($("#equip-content").innerHTML.indexOf("Sandevistan")>=0&&$("#equip-content").innerHTML.indexOf("Wolvers")>=0)
+      ok("Solo-Cyber-Preset oder-Option");
+    else fail("Solo-Cyber-Preset");
+
+    /* 11b. Klick-Tests: Preset-Radio */
+    const radios=$$("#equip-content input[type=radio][name='p_cyber_2']");
+    if(radios.length===2){
+      radios[1].click();
+      if(S.presetChoices.cyber[2]===1) ok("Preset-Radio-Klick (Wolvers gewählt)");
+      else fail("Preset-Radio: "+S.presetChoices.cyber[2]);
+    } else fail("Preset-Radios nicht gefunden ("+radios.length+")");
+
+    /* 11c. Klick-Tests: CP-Stat-Stepper */
+    S=freshState("complete"); S.role="netrunner"; S.culturalLang="English";
+    S.stats={}; go("stats");
+    const incBtn=$$("#stats-content [data-stinc]")[0];
+    incBtn.click();
+    if(S.stats.INT===3) ok("CP-STAT-Stepper-Klick (INT 3)");
+    else fail("CP-STAT-Stepper: INT="+S.stats.INT);
+
+    /* 11d. Klick-Tests: Shop kaufen/qty */
+    go("shop");
+    const addBtn=$$("#shop-content [data-addidx]")[0];
+    const before=S.buys.length;
+    addBtn.click();
+    if(S.buys.length===before+1) ok("Shop-Kaufen-Klick ("+S.buys[0].name+")");
+    else fail("Shop-Kaufen-Klick");
+    const decBtn=$$("#shop-content [data-qtydec]")[0];
+    decBtn.click();
+    if(S.buys.length===before) ok("Qty-Minus-Klick entfernt Einzelstück");
+    else fail("Qty-Minus-Klick: "+S.buys.length+" vs "+before);
+
+    /* 11e. Klick-Tests: ER-Skill-Stepper */
+    S=freshState("edgerunner"); S.role="solo"; S.culturalLang="German";
+    S.statRolls={}; CPR.STATS.forEach(st=>S.statRolls[st]=3);
+    CPR.STATS.forEach((st,i)=>S.stats[st]=CPR.STAT_TEMPLATES.solo[2][i]);
+    go("skills");
+    const skillPlus=$$("#skills-content button[data-erskill][data-dir='1']")[0];
+    skillPlus.click();
+    const firstSkill=Object.keys(S.skills)[0];
+    if(S.skills[firstSkill]===3) ok("ER-Skill-Stepper-Klick ("+firstSkill+"=3)");
+    else fail("ER-Skill-Stepper: "+firstSkill+"="+S.skills[firstSkill]);
+
+    /* 11f. Equip: Tab-Wechsel per Klick */
+    go("equip");
+    $$("#equip-content [data-eqtab]")[1].click();
+    if(S.equipTab==="outfit"&&$("#equip-content").innerHTML.indexOf("Lifestyle")>=0) ok("Equip-Tab-Klick");
+    else fail("Equip-Tab-Klick: "+S.equipTab);
+
+    /* 12. Wuerfellog & Toast */
+    diceLog("test"); toast("test");
+    if($("#dicelog-entries").innerHTML.indexOf("test")>=0) ok("Wuerfellog");
+    else fail("Wuerfellog");
+
+    /* 12b. PDF-Fuellmodul (offizieller RTG-Bogen) */
+    if(typeof CPR.sheetPDFValues==="function") ok("sheet-pdf.js geladen (sheetPDFValues)");
+    else fail("sheet-pdf.js fehlt");
+    if(typeof PDFLib!=="undefined"&&PDFLib.PDFDocument) ok("pdf-lib geladen");
+    else fail("pdf-lib fehlt");
+    if(typeof window.CPR_SHEET_PDF_B64==="string"&&window.CPR_SHEET_PDF_B64.length>1500000)
+      ok("RTG-Bogen eingebettet ("+Math.round(window.CPR_SHEET_PDF_B64.length/1000)+" KB Base64)");
+    else fail("RTG-Bogen-Basis64 fehlt");
+    if(typeof fillSheetPDF==="function") ok("fillSheetPDF global verfuegbar");
+    else fail("fillSheetPDF fehlt");
+    go("sheet");
+    if($("#sheet-content").innerHTML.indexOf("btn-pdf")>=0) ok("Sheet-Screen hat PDF-Button");
+    else fail("PDF-Button fehlt");
+    S.name="Kesha"; /* 11e hatte freshState ohne Namen */
+    const dvPDF=derived();
+    const pdfRes=CPR.sheetPDFValues();
+    if(pdfRes.values.Handle==="Kesha") ok("PDF: Handle=Kesha");
+    else fail("PDF Handle="+pdfRes.values.Handle);
+    if(pdfRes.values.Role==="Solo"&&pdfRes.values["Role Ability"]==="Combat Awareness"
+      &&pdfRes.values["Role Ability Rank"]==="4") ok("PDF: Rolle/Ability/Rang");
+    else fail("PDF Rolle: "+pdfRes.values.Role);
+    if(["INT","REF","DEX","TECH","COOL","WILL","MOVE","BODY"]
+      .every(k=>pdfRes.values[k]===String(S.stats[k]))) ok("PDF: 8 STAT-Felder gesetzt");
+    else fail("PDF STATs unvollstaendig");
+    if(pdfRes.values["LUCK MAX"]===String(S.stats.LUCK)
+      &&pdfRes.values["LUCK CURRENT"]===String(S.stats.LUCK)) ok("PDF: LUCK MAX/CURRENT");
+    else fail("PDF LUCK");
+    if(pdfRes.values["Max HP"]===String(dvPDF.hp)&&pdfRes.values["Current HP"]===String(dvPDF.hp)
+      &&pdfRes.values["Seriously Wounded Threshhold"]===String(dvPDF.sw)
+      &&pdfRes.values["Death Save"]===String(dvPDF.deathSave))
+      ok("PDF: HP/SW/DS ("+dvPDF.hp+"/"+dvPDF.sw+"/"+dvPDF.deathSave+")");
+    else fail("PDF HP/SW/DS");
+    if(pdfRes.values["Max Humanity"]===String(dvPDF.humMax)
+      &&pdfRes.values["Current Humanity"]===String(dvPDF.humanity)
+      &&pdfRes.values["EMP MAX"]===String(S.stats.EMP)
+      &&pdfRes.values.EMP===String(dvPDF.empEff))
+      ok("PDF: Humanity "+dvPDF.humanity+"/"+dvPDF.humMax+", EMP "+dvPDF.empEff+" (MAX "+S.stats.EMP+")");
+    else fail("PDF Humanity/EMP");
+    /* Skill-Totals: erster Skill (Athletics) wurde per Stepper auf 3 erhoeht */
+    const fs1=Object.keys(S.skills)[0];
+    const stat1=skillStat(fs1)==="EMP"?dvPDF.empEff:S.stats[skillStat(fs1)];
+    const totField1=(SP_SKILL_FIELDS[fs1]&&SP_SKILL_FIELDS[fs1][1])
+      ||(SP_FIXED_ROWS[fs1]&&SP_FIXED_ROWS[fs1][1])||null;
+    if(totField1&&pdfRes.values[totField1]===String(stat1+3)) ok("PDF: "+fs1+" Total="+pdfRes.values[totField1]);
+    else fail("PDF "+fs1+" Total="+(totField1?pdfRes.values[totField1]:"(kein Feld)"));
+    if(pdfRes.values["Lang Street Slang Total"]===String(S.stats.INT+2))
+      ok("PDF: Streetslang Total="+pdfRes.values["Lang Street Slang Total"]+" (INT-basiert)");
+    else fail("PDF Streetslang Total="+pdfRes.values["Lang Street Slang Total"]);
+    if(pdfRes.values["Language 2"]==="German"&&pdfRes.values["Lang 2 Total"]===String(S.stats.INT+4))
+      ok("PDF: Kultur-Sprache German (Total "+pdfRes.values["Lang 2 Total"]+")");
+    else fail("PDF Kultur-Sprache: "+pdfRes.values["Language 2"]+"/"+pdfRes.values["Lang 2 Total"]);
+    /* Waffen-Zeilen aus Solo-Preset (keine opt-Auswahl -> Index 0) */
+    if(pdfRes.values.WEAPONRow1==="Assault Rifle"&&pdfRes.values.DMGRow1==="5d6"
+      &&pdfRes.values.AMMORow1==="25 (Rifle)"&&pdfRes.values.ROFRow1==="1") ok("PDF: Waffenzeile 1 Assault Rifle");
+    else fail("PDF Waffe1: "+pdfRes.values.WEAPONRow1+"/"+pdfRes.values.DMGRow1);
+    if(pdfRes.values.WEAPONRow2==="Very Heavy Pistol"&&pdfRes.values.WEAPONRow3==="Heavy Melee Weapon")
+      ok("PDF: Waffenzeilen 2+3");
+    else fail("PDF Waffen 2/3: "+pdfRes.values.WEAPONRow2+"/"+pdfRes.values.WEAPONRow3);
+    /* Armor + Gear + Cash aus Solo-Preset */
+    if(pdfRes.values["Body Armor"]==="Light Armorjack"&&pdfRes.values.SPBody==="11"
+      &&pdfRes.values["Head Armor"]==="Light Armorjack"&&pdfRes.values.SPHead==="11")
+      ok("PDF: Armorjack Body+Head SP11");
+    else fail("PDF Armor: "+pdfRes.values["Body Armor"]+"/"+pdfRes.values.SPBody);
+    if(pdfRes.values["Gear 1"]==="Agent") ok("PDF: Gear 1=Agent");
+    else fail("PDF Gear1="+pdfRes.values["Gear 1"]);
+    if(pdfRes.values.Cash==="500eb") ok("PDF: Cash=500eb (keine Kaeufe)");
+    else fail("PDF Cash="+pdfRes.values.Cash);
+    /* Cyberware-Seite 3: Solo-Preset Biomonitor(Fashionware)/Neural Link/Sandevistan */
+    if(pdfRes.values.FW1==="Biomonitor"&&pdfRes.values["NLink 1"]==="Sandevistan")
+      ok("PDF: Cyber FW1/NLink1");
+    else fail("PDF Cyber: FW1="+pdfRes.values.FW1+" NLink1="+pdfRes.values["NLink 1"]);
+    if(pdfRes.checks.indexOf("Link Box")>=0) ok("PDF: Checkbox Neural Link");
+    else fail("PDF Link Box nicht angehakt: "+pdfRes.checks.join(","));
+    if(pdfRes.values.Reputation==="0"&&pdfRes.values["Current IP"]==="0")
+      ok("PDF: Reputation/IP=0 (S. 194)");
+    else fail("PDF Reputation/IP");
+    if(typeof pdfRes.warns==="object") ok("PDF: "+pdfRes.warns.length+" Warnung(en) im Ergebnis");
+    else fail("PDF warnt nicht korrekt");
+
+    /* 13. Save/Load rundet */
+    S.name="Kesha2";
+    save();
+    if(load()&&S.name==="Kesha2"&&S.role==="solo") ok("Save/Load");
+    else fail("Save/Load");
+  }catch(e){ fail("EXCEPTION: "+e.message); }
+  const pre=document.createElement("pre");
+  pre.id="test-results";
+  pre.textContent=out.join("\n");
+  document.body.appendChild(pre);
+  document.title="TESTS-DONE";
+})();
+</script>
+</body>
+</html>

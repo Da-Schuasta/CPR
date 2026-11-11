@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyberpunk RED – Charaktererschaffung (Core Rules)</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-red">CYBERPUNK</span> <span class="brand-yellow">RED</span>
+    <span class="brand-sub">Charaktererschaffung · Core Rules</span>
+  </div>
+  <div class="topbar-actions">
+    <button id="btn-dicelog" class="btn btn-ghost" type="button">🎲 Würfellog</button>
+    <button id="btn-reset" class="btn btn-ghost btn-danger" type="button">↺ Neu starten</button>
+  </div>
+</header>
+
+<nav id="stepper" class="stepper" aria-label="Schritte"></nav>
+
+<main id="main">
+
+  <!-- START -->
+  <section id="screen-start" class="screen">
+    <div class="wrap" id="start-content"></div>
+  </section>
+
+  <!-- SCHRITT 1: ROLLE -->
+  <section id="screen-role" class="screen hidden">
+    <div class="wrap" id="role-content"></div>
+  </section>
+
+  <!-- SCHRITT 2: LIFEPATH -->
+  <section id="screen-lifepath" class="screen hidden">
+    <div class="wrap" id="lifepath-content"></div>
+  </section>
+
+  <!-- SCHRITT 3: STATS -->
+  <section id="screen-stats" class="screen hidden">
+    <div class="wrap" id="stats-content"></div>
+  </section>
+
+  <!-- SCHRITT 4: ABGELEITETE WERTE -->
+  <section id="screen-derived" class="screen hidden">
+    <div class="wrap" id="derived-content"></div>
+  </section>
+
+  <!-- SCHRITT 5: SKILLS -->
+  <section id="screen-skills" class="screen hidden">
+    <div class="wrap" id="skills-content"></div>
+  </section>
+
+  <!-- SCHRITTE 6–8: AUSRÜSTUNG (Streetrat / Edgerunner) -->
+  <section id="screen-equip" class="screen hidden">
+    <div class="wrap" id="equip-content"></div>
+  </section>
+
+  <!-- SCHRITT 6: EINKAUF (Complete Package) -->
+  <section id="screen-shop" class="screen hidden">
+    <div class="wrap" id="shop-content"></div>
+  </section>
+
+  <!-- CHARAKTERBOGEN -->
+  <section id="screen-sheet" class="screen hidden">
+    <div class="wrap" id="sheet-content"></div>
+  </section>
+
+</main>
+
+<!-- WÜRFELLOG -->
+<aside id="dicelog" class="dicelog hidden" aria-label="Würfellog">
+  <div class="dicelog-head">
+    <strong>🎲 Würfellog</strong>
+    <button id="btn-dicelog-close" class="btn btn-ghost btn-small" type="button">✕</button>
+  </div>
+  <div id="dicelog-entries" class="dicelog-entries"></div>
+</aside>
+
+<div id="toast" class="toast hidden"></div>
+
+<footer class="footer">
+  Inoffizielles Fan-Werkzeug zur Charaktererschaffung nach den Flowcharts des
+  <em>Cyberpunk RED Core Rulebook</em> (S.&nbsp;41–42: Streetrat/Edgerunner mit 8 Schritten,
+  Complete Package mit 6 Schritten). Alle Regeln, Preise und Tabellen nach den Core Rules;
+  Spielbegriffe in Englisch wie im Buch. Keine Verbindung zum Internet nötig.
+</footer>
+
+<script src="js/data.js"></script>
+<script src="js/lifepath.js"></script>
+<script src="js/app.js"></script>
+<script src="js/vendor/pdf-lib.min.js"></script>
+<script src="js/sheet-pdf-b64.js"></script>
+<script src="js/sheet-pdf.js"></script>
+</body>
+</html>
